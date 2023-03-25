@@ -247,8 +247,8 @@ pub fn make_basic_constraints_ext(ca: bool, path_len: u32) -> X509Extension {
 
 /// Make Key Usage Extension
 pub fn make_key_usage_ext(key_usage: KeyUsage) -> X509Extension {
-    let usage: Usage = key_usage.into();
-    usage.build().unwrap()
+    let mut usage: Usage = key_usage.into();
+    usage.critical().build().unwrap()
 }
 
 /// Make TCG UEID extension
@@ -260,7 +260,7 @@ pub fn make_tcg_ueid_ext(ueid: &[u8]) -> X509Extension {
 
     let tcg_ueid = TcgUeid { ueid };
     let der = asn1::write_single(&tcg_ueid).unwrap();
-    let der_str = format!("DER:{}", hex::encode(der).to_uppercase());
+    let der_str = format!("critical,DER:{}", hex::encode(der).to_uppercase());
 
     X509Extension::new(None, None, TCG_UEID_OID, &der_str).unwrap()
 }
