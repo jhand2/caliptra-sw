@@ -28,6 +28,11 @@ name = "mbox"
 path = "src/mbox_tests.rs"
 required-features = ["riscv"]
 
+[[bin]]
+name = "cert"
+path = "src/cert_tests.rs"
+required-features = ["riscv"]
+
 [build-dependencies]
 cfg-if = "1.0.0"
 
@@ -36,4 +41,5 @@ caliptra-test-harness = { path = "../../test-harness" }
 caliptra-cpu = { version = "0.1.0", path = "../../cpu" }
 caliptra-runtime = { path = "..", default-features = false }
 caliptra-drivers = { path = "../../drivers" }
+caliptra-registers = { path = "../../registers" }
 cfg-if = "1.0.0"

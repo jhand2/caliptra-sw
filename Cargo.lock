@@ -476,8 +476,10 @@ dependencies = [
  "caliptra-image-serde",
  "caliptra-image-types",
  "caliptra-registers",
+ "caliptra-x509",
  "caliptra_common",
  "cfg-if",
+ "openssl",
  "ufmt",
  "zerocopy",
 ]
@@ -488,6 +490,7 @@ version = "0.1.0"
 dependencies = [
  "caliptra-cpu",
  "caliptra-drivers",
+ "caliptra-registers",
  "caliptra-runtime",
  "caliptra-test-harness",
  "cfg-if",

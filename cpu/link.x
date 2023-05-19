@@ -1,4 +1,4 @@
-SECTIONS 
+SECTIONS
 {
 	.text : ALIGN(4)
 	{
@@ -15,7 +15,7 @@ SECTIONS
 	.rodata : ALIGN(4)
 	{
         _srodata = .;
-		
+
 		*(.srodata .srodata.*);
     	*(.rodata .rodata.*);
 
@@ -23,23 +23,23 @@ SECTIONS
         _erodata = .;
 	} > REGION_RODATA
 
-	.data : AT (_erodata) ALIGN(4) 
+	.data : AT (_erodata) ALIGN(4)
 	{
 		_sidata = LOADADDR(.data);
 	    _sdata = .;
-		
+
 	    /* Must be called __global_pointer$ for linker relaxations to work. */
 	    PROVIDE(__global_pointer$ = . + 0x800);
-   
+
 		*(.sdata .sdata.* .sdata2 .sdata2.*);
 	    *(.data .data.*);
-	    
+
 		. = ALIGN(4);
 	    _edata = .;
-	} > REGION_DATA 
+	} > REGION_DATA
 
- 
-	.bss (NOLOAD) : ALIGN(4) 
+
+	.bss (NOLOAD) : ALIGN(4)
     {
 		_sbss = .;
 
@@ -47,14 +47,14 @@ SECTIONS
         *(.sbss*)
         *(COMMON)
         . = ALIGN(4);
-		
+
 		_ebss = .;
     } > REGION_BSS
 
     .stack (NOLOAD): ALIGN(4)
     {
     	_estack = .;
-		
+
         . = . + STACK_SIZE;
 
         . = ALIGN(4);
@@ -64,7 +64,7 @@ SECTIONS
 	.estack (NOLOAD): ALIGN(4)
     {
     	_eestack = .;
-		
+
         . = . + ESTACK_SIZE;
 
         . = ALIGN(4);
@@ -74,7 +74,7 @@ SECTIONS
 	.nstack (NOLOAD): ALIGN(4)
     {
     	_enstack = .;
-		
+
         . = . + NSTACK_SIZE;
 
         . = ALIGN(4);
@@ -87,14 +87,14 @@ SECTIONS
     	KEEP(*(.got .got.*));
   	}
 
-  	.eh_frame (INFO) : 
-	{ 
+  	.eh_frame (INFO) :
+	{
 		KEEP(*(.eh_frame))
 	}
-	
+
   	.eh_frame_hdr (INFO) :
 	{
-		*(.eh_frame_hdr) 
+		*(.eh_frame_hdr)
 	}
 }
 

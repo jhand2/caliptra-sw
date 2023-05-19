@@ -2,8 +2,11 @@
 
 #![no_std]
 
-mod mailbox;
+pub mod dice;
 mod verify;
+
+// Used by runtime tests
+pub mod mailbox;
 
 use mailbox::Mailbox;
 
