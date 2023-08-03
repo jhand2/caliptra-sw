@@ -16,13 +16,14 @@ use mailbox::Mailbox;
 
 use caliptra_common::cprintln;
 use caliptra_crypto::CaliptraCrypto;
-use caliptra_drivers::{CaliptraError, CaliptraResult, DataVault, Ecc384, PcrBank, PcrId};
+use caliptra_drivers::{CaliptraError, CaliptraResult, DataVault, Ecc384, PcrBank, PcrId, Sha384};
 use caliptra_platform::CaliptraPlatform;
 use caliptra_registers::{
     dv::DvReg,
     ecc::EccReg,
     mbox::{enums::MboxStatusE, MboxCsr},
     pv::PvReg,
+    sha512::Sha512Reg,
     sha512_acc::Sha512AccCsr,
 };
 use dpe::{
@@ -33,7 +34,6 @@ use dpe::{
     DPE_PROFILE,
 };
 use zerocopy::{AsBytes, FromBytes};
-use core::marker::PhantomData;
 
 #[derive(PartialEq, Eq)]
 pub struct CommandId(pub u32);
@@ -76,6 +76,7 @@ pub const DPE_LOCALITY: u32 = 0x0;
 pub struct Drivers<'a> {
     pub mbox: Mailbox,
     pub sha_acc: Sha512AccCsr,
+    pub sha384: Sha384,
     pub ecdsa: Ecc384,
     pub data_vault: DataVault,
     pub pcr_bank: PcrBank,
@@ -108,9 +109,10 @@ impl Drivers<'_> {
     /// these drivers.
     pub unsafe fn new_from_registers() -> Self {
         let pcr_bank = PcrBank::new(PvReg::new());
+        let mut sha384 = Sha384::new(Sha512Reg::new());
 
         let mut env = CaliptraEnv {
-            crypto: CaliptraCrypto(PhantomData),
+            crypto: CaliptraCrypto::new(&mut sha384),
             platform: CaliptraPlatform,
         };
         // TODO: Replace issuer common name with FMC code to generate the runtime alias once it is written
@@ -135,6 +137,7 @@ impl Drivers<'_> {
         Self {
             mbox: Mailbox::new(MboxCsr::new()),
             sha_acc: Sha512AccCsr::new(),
+            sha384: Sha384::new(Sha512Reg::new()),
             ecdsa: Ecc384::new(EccReg::new()),
             data_vault: DataVault::new(DvReg::new()),
             pcr_bank,
@@ -208,13 +211,11 @@ fn wait_for_cmd(_mbox: &mut Mailbox) {
 }
 
 fn handle_command(drivers: &mut Drivers) -> CaliptraResult<MboxStatusE> {
-    let mbox = &mut drivers.mbox;
-
-    let cmd_id = mbox.cmd();
-    let dlen = mbox.dlen() as usize;
-    let dlen_words = mbox.dlen_words() as usize;
+    let cmd_id = drivers.mbox.cmd();
+    let dlen = drivers.mbox.dlen() as usize;
+    let dlen_words = drivers.mbox.dlen_words() as usize;
     let mut buf = [0u32; 1024];
-    mbox.copy_from_mbox(
+    drivers.mbox.copy_from_mbox(
         buf.get_mut(..dlen_words)
             .ok_or(CaliptraError::RUNTIME_INTERNAL)?,
     );
@@ -229,7 +230,11 @@ fn handle_command(drivers: &mut Drivers) -> CaliptraResult<MboxStatusE> {
         .get(..dlen)
         .ok_or(CaliptraError::RUNTIME_INSUFFICIENT_MEMORY)?;
 
-    cprintln!("[rt] Received command=0x{:x}, len={}", cmd_id, mbox.dlen());
+    cprintln!(
+        "[rt] Received command=0x{:x}, len={}",
+        cmd_id,
+        drivers.mbox.dlen()
+    );
     match CommandId::from(cmd_id) {
         CommandId::FIRMWARE_LOAD => Err(CaliptraError::RUNTIME_UNIMPLEMENTED_COMMAND),
         CommandId::GET_IDEV_CSR => Err(CaliptraError::RUNTIME_UNIMPLEMENTED_COMMAND),
@@ -240,8 +245,10 @@ fn handle_command(drivers: &mut Drivers) -> CaliptraResult<MboxStatusE> {
         }
         CommandId::STASH_MEASUREMENT => Err(CaliptraError::RUNTIME_UNIMPLEMENTED_COMMAND),
         CommandId::INVOKE_DPE => {
-            let resp = invoke_dpe::handle_invoke_dpe_command(&mut drivers.dpe, cmd_bytes)?;
-            mbox.write_response(&resp.data[..resp.size as usize])?;
+            let resp = invoke_dpe::handle_invoke_dpe_command(drivers, cmd_bytes)?;
+            drivers
+                .mbox
+                .write_response(&resp.data[..resp.size as usize])?;
             Ok(MboxStatusE::DataReady)
         }
         _ => Err(CaliptraError::RUNTIME_UNIMPLEMENTED_COMMAND),

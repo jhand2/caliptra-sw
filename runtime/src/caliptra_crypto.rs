@@ -1,32 +1,23 @@
 // Licensed under the Apache-2.0 license
 
-use caliptra_drivers::{Array4x12, Csrng, KeyId, Sha384, Sha384DigestOp};
-use caliptra_registers::{csrng::CsrngReg, entropy_src::EntropySrcReg, sha512::Sha512Reg};
-use core::{num::NonZeroUsize, marker::PhantomData};
-use crypto::{AlgLen, Crypto, CryptoError, Digest, EcdsaPub, EcdsaSig, Hasher, HmacSig};
+use caliptra_drivers::{Csrng, KeyId, Sha384, Sha384Ctx};
+use caliptra_registers::{csrng::CsrngReg, entropy_src::EntropySrcReg};
+use core::num::NonZeroUsize;
+use crypto::{AlgLen, Crypto, CryptoError, Digest, EcdsaPub, EcdsaSig, HmacSig};
 
-pub struct CaliptraHasher<'a>(Sha384DigestOp<'a>, Sha384, Array4x12);
+pub struct CaliptraCrypto<'a> {
+    sha384: &'a mut Sha384,
+}
 
-impl Hasher for CaliptraHasher<'_> {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), CryptoError> {
-        self.0.update(bytes);
-        Ok(())
-    }
-
-    fn finish(mut self) -> Result<Digest, CryptoError> {
-        self.0.finalize();
-        Digest::new(
-            <[u8; AlgLen::Bit384.size()]>::from(self.2).as_ref(),
-            AlgLen::Bit384,
-        )
+impl<'a> CaliptraCrypto<'a> {
+    pub fn new(sha384: &'a mut Sha384) -> Self {
+        Self { sha384 }
     }
 }
 
-pub struct CaliptraCrypto<'a>(pub PhantomData<&'a ()>);
-
 impl<'a> Crypto for CaliptraCrypto<'a> {
     type Cdi = KeyId;
-    type Hasher = CaliptraHasher<'a>;
+    type HashCtx = Sha384Ctx;
     type PrivKey = KeyId;
 
     fn rand_bytes(&mut self, dst: &mut [u8]) -> Result<(), CryptoError> {
@@ -47,18 +38,29 @@ impl<'a> Crypto for CaliptraCrypto<'a> {
         Ok(())
     }
 
-    fn hash_initialize(&mut self, algs: AlgLen) -> Result<Self::Hasher, CryptoError> {
+    fn hash_initialize(&mut self, algs: AlgLen) -> Result<Self::HashCtx, CryptoError> {
         match algs {
             AlgLen::Bit256 => Err(CryptoError::Size),
-            AlgLen::Bit384 => {
-                let mut digest = Array4x12::default();
-                let mut sha = unsafe { Sha384::new(Sha512Reg::new()) };
-                let hasher = sha
-                    .digest_init(&mut digest)
-                    .map_err(|_| CryptoError::CryptoLibError)?;
-                Ok(CaliptraHasher(hasher, sha, digest))
-            }
+            AlgLen::Bit384 => Ok(Sha384Ctx::new()),
         }
+    }
+
+    fn hash_update(&mut self, ctx: &mut Sha384Ctx, bytes: &[u8]) -> Result<(), CryptoError> {
+        self.sha384
+            .update_ctx(ctx, bytes)
+            .map_err(|_| CryptoError::HashError)?;
+        Ok(())
+    }
+
+    fn hash_finish(&mut self, ctx: &mut Self::HashCtx) -> Result<Digest, CryptoError> {
+        let digest = self
+            .sha384
+            .finalize_ctx(ctx)
+            .map_err(|_| CryptoError::HashError)?;
+        Digest::new(
+            <[u8; AlgLen::Bit384.size()]>::from(digest).as_ref(),
+            AlgLen::Bit384,
+        )
     }
 
     fn derive_cdi(
@@ -80,11 +82,19 @@ impl<'a> Crypto for CaliptraCrypto<'a> {
         Err(CryptoError::NotImplemented)
     }
 
-    fn derive_ecdsa_pub(&mut self, _algs: AlgLen, _priv_key: &Self::PrivKey) -> Result<EcdsaPub, CryptoError> {
+    fn derive_ecdsa_pub(
+        &mut self,
+        _algs: AlgLen,
+        _priv_key: &Self::PrivKey,
+    ) -> Result<EcdsaPub, CryptoError> {
         Err(CryptoError::NotImplemented)
     }
 
-    fn ecdsa_sign_with_alias(&mut self, _algs: AlgLen, _digest: &Digest) -> Result<EcdsaSig, CryptoError> {
+    fn ecdsa_sign_with_alias(
+        &mut self,
+        _algs: AlgLen,
+        _digest: &Digest,
+    ) -> Result<EcdsaSig, CryptoError> {
         Err(CryptoError::NotImplemented)
     }
 
@@ -97,7 +107,11 @@ impl<'a> Crypto for CaliptraCrypto<'a> {
         Err(CryptoError::NotImplemented)
     }
 
-    fn get_ecdsa_alias_serial(&mut self, _algs: AlgLen, _serial: &mut [u8]) -> Result<(), CryptoError> {
+    fn get_ecdsa_alias_serial(
+        &mut self,
+        _algs: AlgLen,
+        _serial: &mut [u8],
+    ) -> Result<(), CryptoError> {
         Err(CryptoError::NotImplemented)
     }
 
