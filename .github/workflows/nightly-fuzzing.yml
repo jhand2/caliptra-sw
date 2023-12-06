@@ -3,6 +3,7 @@ on:
   schedule:
     # 3:00 AM PST monday-saturday
     - cron: '00 11 * * 1-6'
+  push:
 
 jobs:
   image_verify_seed_corpus:
